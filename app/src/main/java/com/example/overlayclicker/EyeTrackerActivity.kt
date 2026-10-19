@@ -8,9 +8,11 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PointF
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -23,6 +25,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.google.mlkit.vision.face.FaceLandmark
@@ -33,13 +36,20 @@ class EyeTrackerActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
     private lateinit var overlay: EyeOverlayView
+    private lateinit var statusView: TextView
     private lateinit var analysisExecutor: ExecutorService
+
+    // Blinzel-Erkennung: beide Augen zu (< CLOSED) und danach wieder offen (> OPEN) = ein Blinzeln
+    private var eyesClosed = false
+    private var closedSince = 0L
+    private var blinkCount = 0
 
     private val detector by lazy {
         FaceDetection.getClient(
             FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
                 .build()
         )
     }
@@ -60,6 +70,14 @@ class EyeTrackerActivity : AppCompatActivity() {
         analysisExecutor = Executors.newSingleThreadExecutor()
         previewView = PreviewView(this).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
         overlay = EyeOverlayView(this)
+        statusView = TextView(this).apply {
+            textSize = 18f
+            setTextColor(Color.BLACK)
+            setBackgroundColor(0xDDFFFFFF.toInt())
+            setPadding(24, 16, 24, 16)
+            text = "Kamera startet..."
+        }
+
         val root = FrameLayout(this)
         val fullSize = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -67,6 +85,14 @@ class EyeTrackerActivity : AppCompatActivity() {
         )
         root.addView(previewView, fullSize)
         root.addView(overlay as View, FrameLayout.LayoutParams(fullSize))
+        root.addView(
+            statusView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            ).apply { topMargin = 120 }
+        )
         setContentView(root)
 
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -114,13 +140,46 @@ class EyeTrackerActivity : AppCompatActivity() {
                     face.getLandmark(FaceLandmark.RIGHT_EYE)?.position?.let { eyes.add(it) }
                 }
                 overlay.update(eyes, imageW, imageH)
+                updateBlinkState(faces.firstOrNull())
             }
             .addOnCompleteListener { imageProxy.close() }
+    }
+
+    /** Läuft auf dem Main-Thread (Listener von ML Kit). */
+    private fun updateBlinkState(face: Face?) {
+        if (face == null) {
+            statusView.text = "Kein Gesicht erkannt"
+            eyesClosed = false
+            return
+        }
+        val left = face.leftEyeOpenProbability ?: return
+        val right = face.rightEyeOpenProbability ?: return
+        val now = System.currentTimeMillis()
+
+        if (!eyesClosed && left < EYE_CLOSED && right < EYE_CLOSED) {
+            eyesClosed = true
+            closedSince = now
+        } else if (eyesClosed && left > EYE_OPEN && right > EYE_OPEN) {
+            eyesClosed = false
+            val duration = now - closedSince
+            if (duration in MIN_BLINK_MS..MAX_BLINK_MS) {
+                blinkCount++
+            }
+        }
+
+        statusView.text = "Blinzeln: $blinkCount  |  Augen L %.2f  R %.2f".format(left, right)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         analysisExecutor.shutdown()
+    }
+
+    companion object {
+        private const val EYE_CLOSED = 0.3f
+        private const val EYE_OPEN = 0.7f
+        private const val MIN_BLINK_MS = 60L
+        private const val MAX_BLINK_MS = 700L
     }
 }
 
