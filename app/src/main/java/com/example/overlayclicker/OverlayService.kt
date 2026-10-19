@@ -32,7 +32,8 @@ class OverlayService : Service() {
         val close = Button(this).apply { text = "Close panel"; setOnClickListener { stopSelf() } }
         panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(12, 12, 12, 12)
+            setPadding(16, 16, 16, 16)
+            setBackgroundColor(0xF2FFFFFF.toInt())
             addView(query); addView(click); addView(close)
         }
         val params = WindowManager.LayoutParams(
@@ -41,7 +42,7 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             0,
             PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.END; x = 20; y = 140 }
+        ).apply { gravity = Gravity.BOTTOM or Gravity.START; x = 20; y = 120 }
         wm.addView(panel, params)
     }
     override fun onDestroy() { panel?.let { wm.removeView(it) }; panel = null; super.onDestroy() }
