@@ -33,6 +33,10 @@ class MainActivity : Activity() {
                     startService(Intent(this@MainActivity, OverlayService::class.java))
             }
         })
+        layout.addView(Button(this).apply {
+            text = "Eye tracker (Test)"
+            setOnClickListener { startActivity(Intent(this@MainActivity, EyeTrackerActivity::class.java)) }
+        })
         setContentView(layout)
     }
 }
