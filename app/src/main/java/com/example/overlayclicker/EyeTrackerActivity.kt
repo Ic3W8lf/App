@@ -60,10 +60,14 @@ class EyeTrackerActivity : AppCompatActivity() {
         analysisExecutor = Executors.newSingleThreadExecutor()
         previewView = PreviewView(this).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
         overlay = EyeOverlayView(this)
-        setContentView(FrameLayout(this).apply {
-            addView(previewView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            addView(overlay, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        })
+        val root = FrameLayout(this)
+        val fullSize = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        root.addView(previewView, fullSize)
+        root.addView(overlay as View, FrameLayout.LayoutParams(fullSize))
+        setContentView(root)
 
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startCamera()
