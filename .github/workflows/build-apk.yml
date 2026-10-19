@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -16,13 +16,28 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+
       - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
       - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+        run: |
+          set +e
+          gradle --no-daemon --stacktrace assembleDebug > build.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            echo "::error::$(grep -E -A3 'What went wrong|^e: |FAILURE|error:' build.log | tr '\n' ' ' | cut -c1-1500)"
+            tail -60 build.log
+            exit $code
+          fi
+          cat build.log | tail -5
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
